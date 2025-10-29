@@ -111,7 +111,9 @@ class Client(object):
 
         :return: Response to login request to the API.
         """
-        self.session = requests.Session()
+        # Reuse existing session if available, otherwise create a new one
+        if not hasattr(self, 'session') or self.session is None:
+            self.session = requests.Session()
         login = self.session.post(self.url + 'auth/login',
                                   data={'username': username,
                                         'password': password},
