@@ -208,15 +208,27 @@ def addTorrent(link):
     logger.debug('addTorrent(%s)' % link)
 
     qbclient = qbittorrentclient()
-    if qbclient.version == 2:
-        return qbclient.qb.download_from_link(link, savepath=headphones.CONFIG.DOWNLOAD_TORRENT_DIR,
-                                              category=headphones.CONFIG.QBITTORRENT_LABEL)
-    else:
-        args = {'urls': link, 'savepath': headphones.CONFIG.DOWNLOAD_TORRENT_DIR}
-        if headphones.CONFIG.QBITTORRENT_LABEL:
-            args['category'] = headphones.CONFIG.QBITTORRENT_LABEL
+    try:
+        if qbclient.version == 2:
+            qbclient.qb.download_from_link(link, savepath=headphones.CONFIG.DOWNLOAD_TORRENT_DIR,
+                                          category=headphones.CONFIG.QBITTORRENT_LABEL)
+            logger.info("Torrent successfully added to qBittorrent")
+            return True
+        else:
+            args = {'urls': link, 'savepath': headphones.CONFIG.DOWNLOAD_TORRENT_DIR}
+            if headphones.CONFIG.QBITTORRENT_LABEL:
+                args['category'] = headphones.CONFIG.QBITTORRENT_LABEL
 
-        return qbclient._command('command/download', args, 'multipart/form-data')
+            code, response = qbclient._command('command/download', args, 'multipart/form-data')
+            if code == 200:
+                logger.info("Torrent successfully added to qBittorrent")
+                return True
+            else:
+                logger.error("qBittorrent API returned status code: %s" % code)
+                return False
+    except Exception as e:
+        logger.error("Error adding torrent to qBittorrent: %s" % str(e))
+        return False
 
 
 def addFile(data):

@@ -1111,35 +1111,41 @@ def send_to_downloader(data, result, album):
         else:  # if headphones.CONFIG.TORRENT_DOWNLOADER == 4:
             logger.info("Sending torrent to QBiTorrent")
 
-            # Add torrent
-            if result.provider == 'rutracker.org':
-                if qbittorrent.apiVersion2:
-                    qbittorrent.addFile(data)
+            try:
+                # Add torrent
+                if result.provider == 'rutracker.org':
+                    if qbittorrent.apiVersion2:
+                        qbittorrent.addFile(data)
+                    else:
+                        ruobj.qbittorrent_add_file(data)
                 else:
-                    ruobj.qbittorrent_add_file(data)
-            else:
-                qbittorrent.addTorrent(result.url)
+                    if not qbittorrent.addTorrent(result.url):
+                        logger.error("Error sending torrent to qBittorrent. Check qBittorrent logs for details.")
+                        return
 
-            # Get hash
-            torrentid = calculate_torrent_hash(result.url, data)
-            torrentid = torrentid.lower()
-            if not torrentid:
-                logger.error('Torrent id could not be determined')
+                # Get hash
+                torrentid = calculate_torrent_hash(result.url, data)
+                torrentid = torrentid.lower()
+                if not torrentid:
+                    logger.error('Torrent id could not be determined')
+                    return
+
+                # Get name
+                folder_name = qbittorrent.getName(torrentid)
+                if folder_name:
+                    logger.info('Torrent name: %s' % folder_name)
+                else:
+                    logger.error('Torrent name could not be determined')
+                    return
+
+                # Set Seed Ratio
+                # Oh my god why is this repeated again for the 100th time
+                seed_ratio = get_seed_ratio(result.provider)
+                if seed_ratio is not None:
+                    qbittorrent.setSeedRatio(torrentid, seed_ratio)
+            except Exception as e:
+                logger.error('Error sending torrent to qBittorrent: %s' % str(e))
                 return
-
-            # Get name
-            folder_name = qbittorrent.getName(torrentid)
-            if folder_name:
-                logger.info('Torrent name: %s' % folder_name)
-            else:
-                logger.error('Torrent name could not be determined')
-                return
-
-            # Set Seed Ratio
-            # Oh my god why is this repeated again for the 100th time
-            seed_ratio = get_seed_ratio(result.provider)
-            if seed_ratio is not None:
-                qbittorrent.setSeedRatio(torrentid, seed_ratio)
 
     myDB = db.DBConnection()
     myDB.action('UPDATE albums SET status = "Snatched" WHERE AlbumID=?', [album['AlbumID']])
@@ -1900,6 +1906,11 @@ def preprocess(resultlist):
     for result in resultlist:
         headers = {'User-Agent': USER_AGENT}
 
+        # Handle magnet links early - they don't need to be downloaded via HTTP
+        # This catches magnet links regardless of their kind value
+        if result.url.lower().startswith("magnet:"):
+            return True, result
+
         if result.kind == 'soulseek':
             return True, result
 
@@ -1938,9 +1949,9 @@ def preprocess(resultlist):
                     else:
                         return r.content, result
 
-            # Get out of here if we're using Transmission or Deluge
+            # Get out of here if we're using Transmission, Deluge, or qBittorrent
             # if not a magnet link still need the .torrent to generate hash... uTorrent support labeling
-            if headphones.CONFIG.TORRENT_DOWNLOADER in [1, 3]:
+            if headphones.CONFIG.TORRENT_DOWNLOADER in [1, 3, 4]:
                 return True, result
 
             # Get out of here if it's a magnet link
