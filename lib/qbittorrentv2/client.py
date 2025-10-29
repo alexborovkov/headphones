@@ -121,11 +121,18 @@ class Client(object):
         login = self.session.post(self.url + 'auth/login',
                                   data={'username': username,
                                         'password': password},
+                                  headers={
+                                      'Referer': self.url
+                                  },
                                   verify=self.verify)
-        if login.text == 'Ok.':
-            self._is_authenticated = True
+        # Check status code and accept both 'Ok.' and empty string as success
+        if login.status_code == 200:
+            if login.text == 'Ok.' or login.text == '':
+                self._is_authenticated = True
+            else:
+                raise LoginRequired('Login failed: {}'.format(login.text))
         else:
-            raise LoginRequired('Login failed: {}'.format(login.text))
+            raise LoginRequired('Login failed with status {}: {}'.format(login.status_code, login.text))
 
     def logout(self):
         """

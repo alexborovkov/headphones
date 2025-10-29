@@ -103,6 +103,10 @@ class qbittorrentclient(object):
         logger.debug('%s' % json.dumps(headers, indent=4))
         logger.debug('%s' % data)
 
+        # Encode string to bytes for Python 3 compatibility
+        if data and isinstance(data, str):
+            data = data.encode('utf-8')
+
         request = urllib.request.Request(url, data, headers)
         try:
             response = self.opener.open(request)
