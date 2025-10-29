@@ -3,8 +3,12 @@ import json
 
 
 class LoginRequired(Exception):
+    def __init__(self, message='Please login first.'):
+        self.message = message
+        super(LoginRequired, self).__init__(message)
+
     def __str__(self):
-        return 'Please login first.'
+        return self.message
 
 
 class Client(object):
