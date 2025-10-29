@@ -23,6 +23,7 @@ class Client(object):
         """
         if not url.endswith('/'):
             url += '/'
+        self.base_url = url  # Store base URL for Referer header
         self.url = url + 'api/v2/'
         self.verify = verify
 
@@ -116,14 +117,13 @@ class Client(object):
 
         :return: Response to login request to the API.
         """
-        # Reuse existing session if available, otherwise create a new one
-        if not hasattr(self, 'session') or self.session is None:
-            self.session = requests.Session()
+        # Always create a fresh session to avoid contamination from __init__ checks
+        self.session = requests.Session()
         login = self.session.post(self.url + 'auth/login',
                                   data={'username': username,
                                         'password': password},
                                   headers={
-                                      'Referer': self.url
+                                      'Referer': self.base_url  # Use base URL for CSRF protection
                                   },
                                   verify=self.verify)
         # Check status code and accept both 'Ok.' and empty string as success
