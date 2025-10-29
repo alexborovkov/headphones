@@ -57,11 +57,8 @@ class qbittorrentclient(object):
             logger.debug("Attempting to connect to qBittorrent v2 API at %s", self.base_url)
             self.qb = Client(self.base_url)
             logger.debug("Attempting login to qBittorrent with username: %s", self.username)
-            login_text = self.qb.login(self.username, self.password)
-            if login_text:
-                logger.warning("Could not login to qBittorrent v2 api, check credentials: %s", login_text)
-            else:
-                logger.debug("Successfully authenticated to qBittorrent v2 API")
+            self.qb.login(self.username, self.password)
+            logger.debug("Successfully authenticated to qBittorrent v2 API")
             self.version = 2
         except Exception as e:
             logger.warning("Error with qBittorrent v2 api, check settings or update, will try v1: %s" % e)

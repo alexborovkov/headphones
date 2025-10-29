@@ -121,7 +121,7 @@ class Client(object):
         if login.text == 'Ok.':
             self._is_authenticated = True
         else:
-            return login.text
+            raise LoginRequired('Login failed: {}'.format(login.text))
 
     def logout(self):
         """
