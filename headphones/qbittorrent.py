@@ -103,7 +103,8 @@ class qbittorrentclient(object):
         logger.debug('%s' % json.dumps(headers, indent=4))
         logger.debug('%s' % data)
 
-        # Encode string to bytes for Python 3 compatibility
+        # Encode string to bytes for Python 3 compatibility (urlencode returns string)
+        # encode_multipart already returns bytes, so this only affects urlencode case
         if data and isinstance(data, str):
             data = data.encode('utf-8')
 
@@ -325,6 +326,7 @@ _BOUNDARY_CHARS = string.digits + string.ascii_letters
 
 # Taken from http://code.activestate.com/recipes/578668-encode-multipart-form-data-for-uploading-files-via/
 # "MIT License" which is compatible with GPL
+# Modified for Python 3 to work with bytes
 def encode_multipart(args, files, boundary=None):
     logger.debug('encode_multipart()')
 
@@ -333,17 +335,17 @@ def encode_multipart(args, files, boundary=None):
 
     if boundary is None:
         boundary = ''.join(random.choice(_BOUNDARY_CHARS) for i in range(30))
-    lines = []
+
+    # Build parts as bytes from the start
+    parts = []
 
     if args:
         for name, value in list(args.items()):
-            lines.extend((
-                '--{0}'.format(boundary),
-                'Content-Disposition: form-data; name="{0}"'.format(escape_quote(name)),
-                '',
-                str(value),
-            ))
-    logger.debug(''.join(lines))
+            part = '--{0}\r\n'.format(boundary)
+            part += 'Content-Disposition: form-data; name="{0}"\r\n'.format(escape_quote(name))
+            part += '\r\n'
+            part += str(value) + '\r\n'
+            parts.append(part.encode('utf-8'))
 
     if files:
         for name, value in list(files.items()):
@@ -352,20 +354,24 @@ def encode_multipart(args, files, boundary=None):
                 mimetype = value['mimetype']
             else:
                 mimetype = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
-            lines.extend((
-                '--{0}'.format(boundary),
-                'Content-Disposition: form-data; name="{0}"; filename="{1}"'.format(
-                    escape_quote(name), escape_quote(filename)),
-                'Content-Type: {0}'.format(mimetype),
-                '',
-                value['content'],
-            ))
 
-    lines.extend((
-        '--{0}--'.format(boundary),
-        '',
-    ))
-    body = '\r\n'.join(lines)
+            part = '--{0}\r\n'.format(boundary)
+            part += 'Content-Disposition: form-data; name="{0}"; filename="{1}"\r\n'.format(
+                escape_quote(name), escape_quote(filename))
+            part += 'Content-Type: {0}\r\n'.format(mimetype)
+            part += '\r\n'
+            parts.append(part.encode('utf-8'))
+
+            # Handle content as bytes
+            content = value['content']
+            if isinstance(content, str):
+                content = content.encode('utf-8')
+            parts.append(content)
+            parts.append(b'\r\n')
+
+    parts.append('--{0}--\r\n'.format(boundary).encode('utf-8'))
+
+    body = b''.join(parts)
 
     headers = {
         'Content-Type': 'multipart/form-data; boundary={0}'.format(boundary),

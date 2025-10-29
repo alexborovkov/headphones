@@ -43,6 +43,7 @@ class Client(object):
 
         else:
             self._is_authenticated = False
+            self.session = session  # Initialize session even when auth is required
 
     def _get(self, endpoint, **kwargs):
         """
