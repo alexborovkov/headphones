@@ -370,13 +370,13 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if not results and BANDCAMP:
             results = searchBandcamp(album, new, albumlength)
 
-        if not results and SOULSEEK:
+        if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
-            results = searchSoulseek(album, new, losslessOnly, albumlength)
-        elif not results and not SOULSEEK:
+            soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            if soulseek_results:
+                results = results + soulseek_results if results else soulseek_results
+        else:
             logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
-        elif results:
-            logger.debug("Skipping Soulseek search (results already found from other providers)")
 
     # Torrents
     elif headphones.CONFIG.PREFER_TORRENTS == 1 and not choose_specific_download:
@@ -389,13 +389,13 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if not results and BANDCAMP:
             results = searchBandcamp(album, new, albumlength)
 
-        if not results and SOULSEEK:
+        if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
-            results = searchSoulseek(album, new, losslessOnly, albumlength)
-        elif not results and not SOULSEEK:
+            soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            if soulseek_results:
+                results = results + soulseek_results if results else soulseek_results
+        else:
             logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
-        elif results:
-            logger.debug("Skipping Soulseek search (results already found from other providers)")
 
     # Soulseek
     elif headphones.CONFIG.PREFER_TORRENTS == 2 and not choose_specific_download:
@@ -430,10 +430,10 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if BANDCAMP:
             bandcamp_results = searchBandcamp(album, new, albumlength)
 
-        # TODO: get this working
-        # if SOULSEEK:
-            # soulseek_results = searchSoulseek(album, new, losslessOnly,
-            #                                  albumlength, choose_specific_download)
+        if SOULSEEK:
+            logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
+            soulseek_results = searchSoulseek(album, new, losslessOnly,
+                                             albumlength, choose_specific_download)
 
         results = nzb_results + torrent_results + bandcamp_results + soulseek_results
 
