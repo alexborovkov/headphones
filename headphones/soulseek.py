@@ -9,63 +9,123 @@ from datetime import datetime, timedelta
 Result = namedtuple('Result', ['title', 'size', 'user', 'provider', 'type', 'matches', 'bandwidth', 'hasFreeUploadSlot', 'queueLength', 'files', 'kind', 'url', 'folder'])
 
 def initialize_soulseek_client():
-    host = headphones.CONFIG.SOULSEEK_API_URL
-    api_key = headphones.CONFIG.SOULSEEK_API_KEY
-    return slskd_api.SlskdClient(host=host, api_key=api_key)
+    try:
+        host = headphones.CONFIG.SOULSEEK_API_URL
+        api_key = headphones.CONFIG.SOULSEEK_API_KEY
+        logger.debug(f"Initializing Soulseek client with host: {host}")
+        client = slskd_api.SlskdClient(host=host, api_key=api_key)
+        logger.debug("Soulseek client initialized successfully")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to initialize Soulseek client: {e}", exc_info=True)
+        raise
 
     # Search logic, calling search and processing fucntions
 def search(artist, album, year, num_tracks, losslessOnly, allow_lossless, user_search_term):
-    client = initialize_soulseek_client()
+    try:
+        logger.debug(f"=== soulseek.search() called ===")
+        logger.debug(f"Parameters: artist='{artist}', album='{album}', year={year}, num_tracks={num_tracks}")
+        logger.debug(f"Quality settings: losslessOnly={losslessOnly}, allow_lossless={allow_lossless}")
+        logger.debug(f"User search term: '{user_search_term}'")
 
-    # override search string with user provided search term if entered
-    if user_search_term:
-        artist = user_search_term
-        album = ''
-        year = ''
-    
-    # Stage 1: Search with artist, album, year, and num_tracks
-    logger.info(f"Searching Soulseek using term: {artist} {album} {year}")
-    results = execute_search(client, artist, album, year, losslessOnly, allow_lossless)
-    processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks)
-    if processed_results or user_search_term or album.lower() == artist.lower():
-        return processed_results
-    
-    # Stage 2: If Stage 1 fails, search with artist, album, and num_tracks (excluding year)
-    logger.info("Soulseek search stage 1 did not meet criteria. Retrying without year...")
-    results = execute_search(client, artist, album, None, losslessOnly, allow_lossless)
-    processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks)
-    if processed_results or artist == "Various Artists":
-        return processed_results
-    
-    # Stage 3: Final attempt, search only with artist and album
-    logger.info("Soulseek search stage 2 did not meet criteria. Final attempt with only artist and album.")
-    results = execute_search(client, artist, album, None, losslessOnly, allow_lossless)
-    processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_track_count=True)
+        client = initialize_soulseek_client()
 
-    return processed_results
+        # override search string with user provided search term if entered
+        if user_search_term:
+            logger.info(f"Using user-provided search term: '{user_search_term}'")
+            artist = user_search_term
+            album = ''
+            year = ''
+
+        # Stage 1: Search with artist, album, year, and num_tracks
+        logger.info(f"[Stage 1] Searching Soulseek using term: {artist} {album} {year}")
+        results = execute_search(client, artist, album, year, losslessOnly, allow_lossless)
+        processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks)
+        logger.debug(f"[Stage 1] Processed {len(processed_results) if processed_results else 0} results")
+
+        if processed_results or user_search_term or album.lower() == artist.lower():
+            if processed_results:
+                logger.info(f"[Stage 1] SUCCESS - Found {len(processed_results)} matching results")
+            else:
+                logger.info(f"[Stage 1] No results but stopping (user_search_term={bool(user_search_term)}, same_name={album.lower() == artist.lower()})")
+            return processed_results
+
+        logger.debug("[Stage 1] No results meeting criteria, proceeding to Stage 2")
+
+        # Stage 2: If Stage 1 fails, search with artist, album, and num_tracks (excluding year)
+        logger.info("[Stage 2] Soulseek search stage 1 did not meet criteria. Retrying without year...")
+        results = execute_search(client, artist, album, None, losslessOnly, allow_lossless)
+        processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks)
+        logger.debug(f"[Stage 2] Processed {len(processed_results) if processed_results else 0} results")
+
+        if processed_results or artist == "Various Artists":
+            if processed_results:
+                logger.info(f"[Stage 2] SUCCESS - Found {len(processed_results)} matching results")
+            else:
+                logger.info(f"[Stage 2] No results but stopping (Various Artists)")
+            return processed_results
+
+        logger.debug("[Stage 2] No results meeting criteria, proceeding to Stage 3")
+
+        # Stage 3: Final attempt, search only with artist and album
+        logger.info("[Stage 3] Soulseek search stage 2 did not meet criteria. Final attempt with only artist and album (ignoring track count).")
+        results = execute_search(client, artist, album, None, losslessOnly, allow_lossless)
+        processed_results = process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_track_count=True)
+        logger.debug(f"[Stage 3] Processed {len(processed_results) if processed_results else 0} results")
+
+        if processed_results:
+            logger.info(f"[Stage 3] SUCCESS - Found {len(processed_results)} matching results")
+        else:
+            logger.info("[Stage 3] No matching results found after all stages")
+
+        return processed_results
+
+    except Exception as e:
+        logger.error(f"Fatal error in soulseek.search(): {e}", exc_info=True)
+        return []
 
 def execute_search(client, artist, album, year, losslessOnly, allow_lossless):
-    search_text = f"{artist} {album}"
-    if year:
-        search_text += f" {year}"
+    try:
+        search_text = f"{artist} {album}"
+        if year:
+            search_text += f" {year}"
 
-    if losslessOnly:
-        search_text += " flac"
-    elif not allow_lossless:
-            search_text += " mp3"
+        if losslessOnly:
+            search_text += " flac"
+        elif not allow_lossless:
+                search_text += " mp3"
 
-    # Actual search
-    search_response = client.searches.search_text(searchText=search_text, filterResponses=True)
-    search_id = search_response.get('id')
+        logger.debug(f"Executing search with text: '{search_text}'")
 
-    # Wait for search completion and return response
-    while not client.searches.state(id=search_id).get('isComplete'):
-        time.sleep(2)
-    
-    return client.searches.search_responses(id=search_id)
+        # Actual search
+        search_response = client.searches.search_text(searchText=search_text, filterResponses=True)
+        search_id = search_response.get('id')
+        logger.debug(f"Search initiated with ID: {search_id}")
+
+        # Wait for search completion with timeout (max 60 seconds)
+        timeout = 60
+        elapsed = 0
+        while not client.searches.state(id=search_id).get('isComplete'):
+            time.sleep(2)
+            elapsed += 2
+            if elapsed >= timeout:
+                logger.warning(f"Search {search_id} timed out after {timeout} seconds")
+                break
+            if elapsed % 10 == 0:
+                logger.debug(f"Search {search_id} still running ({elapsed}s elapsed)...")
+
+        logger.debug(f"Search {search_id} completed after {elapsed} seconds")
+        responses = client.searches.search_responses(id=search_id)
+        logger.debug(f"Retrieved {len(responses) if responses else 0} search responses")
+        return responses
+
+    except Exception as e:
+        logger.error(f"Error in execute_search(): {e}", exc_info=True)
+        raise
 
 # Processing the search result passed
 def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_track_count=False):
+    logger.debug(f"process_results() called with {len(results) if results else 0} raw responses, num_tracks={num_tracks}, ignore_track_count={ignore_track_count}")
 
     if losslessOnly:
         valid_extensions = {'.flac'}
@@ -73,6 +133,8 @@ def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_tr
         valid_extensions = {'.mp3', '.flac'}
     else:
         valid_extensions = {'.mp3'}
+
+    logger.debug(f"Valid file extensions: {valid_extensions}")
 
     albums = defaultdict(lambda: {'files': [], 'user': None, 'hasFreeUploadSlot': None, 'queueLength': None, 'uploadSpeed': None})
 
@@ -102,12 +164,15 @@ def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_tr
                     })
 
     # Filter albums based on num_tracks, add bunch of useful info to the compiled album
+    logger.debug(f"Found {len(albums)} unique album directories after grouping files")
     final_results = []
     for directory, album_data in albums.items():
-        if ignore_track_count and len(album_data['files']) > 1 or len(album_data['files']) == num_tracks:
+        file_count = len(album_data['files'])
+        if ignore_track_count and file_count > 1 or file_count == num_tracks:
             #album_title = os.path.basename(directory)
             album_title = directory.rsplit('\\', 1)[1]
             total_size = sum(file.get('size', 0) for file in album_data['files'])
+            logger.debug(f"Including album '{album_title}' with {file_count} tracks (user: {album_data['user']})")
             final_results.append(Result(
                 title=album_title,
                 size=int(total_size),
@@ -124,7 +189,10 @@ def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_tr
                 #folder=os.path.basename(directory)
                 folder = album_title
             ))
+        else:
+            logger.debug(f"Filtering out album with {file_count} tracks (expected {num_tracks}, ignore_track_count={ignore_track_count})")
 
+    logger.debug(f"process_results() returning {len(final_results)} albums after track count filtering")
     return final_results
 
 

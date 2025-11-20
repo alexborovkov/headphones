@@ -324,11 +324,35 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
     BANDCAMP = 1 if (headphones.CONFIG.BANDCAMP and
                      headphones.CONFIG.BANDCAMP_DIR) else 0
 
+    # Validate Soulseek configuration with detailed logging
+    logger.debug("=== Soulseek Configuration Check ===")
+    logger.debug(f"SOULSEEK enabled: {headphones.CONFIG.SOULSEEK}")
+    logger.debug(f"SOULSEEK_API_URL: {headphones.CONFIG.SOULSEEK_API_URL}")
+    logger.debug(f"SOULSEEK_API_KEY: {'***SET***' if headphones.CONFIG.SOULSEEK_API_KEY else 'NOT SET'}")
+    logger.debug(f"SOULSEEK_DOWNLOAD_DIR: {headphones.CONFIG.SOULSEEK_DOWNLOAD_DIR}")
+    logger.debug(f"SOULSEEK_INCOMPLETE_DOWNLOAD_DIR: {headphones.CONFIG.SOULSEEK_INCOMPLETE_DOWNLOAD_DIR}")
+
     SOULSEEK = 1 if (headphones.CONFIG.SOULSEEK and
                      headphones.CONFIG.SOULSEEK_API_URL and
                      headphones.CONFIG.SOULSEEK_API_KEY and
                      headphones.CONFIG.SOULSEEK_DOWNLOAD_DIR and
                      headphones.CONFIG.SOULSEEK_INCOMPLETE_DOWNLOAD_DIR) else 0
+
+    logger.debug(f"SOULSEEK flag set to: {SOULSEEK} (1=enabled, 0=disabled)")
+    if not SOULSEEK:
+        missing_configs = []
+        if not headphones.CONFIG.SOULSEEK:
+            missing_configs.append("SOULSEEK checkbox not enabled")
+        if not headphones.CONFIG.SOULSEEK_API_URL:
+            missing_configs.append("SOULSEEK_API_URL")
+        if not headphones.CONFIG.SOULSEEK_API_KEY:
+            missing_configs.append("SOULSEEK_API_KEY")
+        if not headphones.CONFIG.SOULSEEK_DOWNLOAD_DIR:
+            missing_configs.append("SOULSEEK_DOWNLOAD_DIR")
+        if not headphones.CONFIG.SOULSEEK_INCOMPLETE_DOWNLOAD_DIR:
+            missing_configs.append("SOULSEEK_INCOMPLETE_DOWNLOAD_DIR")
+        logger.info(f"Soulseek disabled - missing configuration: {', '.join(missing_configs)}")
+    logger.debug("=== End Soulseek Configuration Check ===")
 
     results = []
     myDB = db.DBConnection()
@@ -347,7 +371,12 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
             results = searchBandcamp(album, new, albumlength)
 
         if not results and SOULSEEK:
+            logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             results = searchSoulseek(album, new, losslessOnly, albumlength)
+        elif not results and not SOULSEEK:
+            logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
+        elif results:
+            logger.debug("Skipping Soulseek search (results already found from other providers)")
 
     # Torrents
     elif headphones.CONFIG.PREFER_TORRENTS == 1 and not choose_specific_download:
@@ -361,10 +390,16 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
             results = searchBandcamp(album, new, albumlength)
 
         if not results and SOULSEEK:
+            logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             results = searchSoulseek(album, new, losslessOnly, albumlength)
+        elif not results and not SOULSEEK:
+            logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
+        elif results:
+            logger.debug("Skipping Soulseek search (results already found from other providers)")
 
     # Soulseek
     elif headphones.CONFIG.PREFER_TORRENTS == 2 and not choose_specific_download:
+        logger.info(f"Attempting Soulseek search (preferred provider) for: {album['ArtistName']} - {album['AlbumTitle']}")
         results = searchSoulseek(album, new, losslessOnly, albumlength)
 
         if not results and NZB_PROVIDERS and NZB_DOWNLOADERS:
@@ -1835,6 +1870,10 @@ def searchTorrent(album, new=False, losslessOnly=False, albumlength=None,
 
 def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
                    choose_specific_download=False):
+    logger.debug(f"=== searchSoulseek() called ===")
+    logger.debug(f"Album: {album.get('ArtistName')} - {album.get('AlbumTitle')}")
+    logger.debug(f"AlbumID: {album.get('AlbumID')}, losslessOnly: {losslessOnly}")
+
     # Not using some of the input stuff for now or ever
     replacements = {
         '...': '',
@@ -1855,6 +1894,8 @@ def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
     cleanalbum = unidecode(replace_all(album['AlbumTitle'], replacements)).strip()
     cleanartist = unidecode(replace_all(album['ArtistName'], replacements)).strip()
 
+    logger.debug(f"Cleaned search terms - Artist: '{cleanartist}', Album: '{cleanalbum}', Year: {year}, Tracks: {num_tracks}")
+
     # If Preferred Bitrate and High Limit and Allow Lossless then get both lossy and lossless
     if headphones.CONFIG.PREFERRED_QUALITY == 2 and headphones.CONFIG.PREFERRED_BITRATE and headphones.CONFIG.PREFERRED_BITRATE_HIGH_BUFFER and headphones.CONFIG.PREFERRED_BITRATE_ALLOW_LOSSLESS:
         allow_lossless = True
@@ -1871,24 +1912,31 @@ def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
     else:
         term = ''
 
+    logger.debug(f"Calling soulseek.search() with allow_lossless={allow_lossless}, losslessOnly={losslessOnly}, user_search_term='{term}'")
+
     try:
         resultlist = soulseek.search(artist=cleanartist, album=cleanalbum, year=year, losslessOnly=losslessOnly,
                                   allow_lossless=allow_lossless, num_tracks=num_tracks, user_search_term=term)
 
         if not resultlist:
             logger.info("No valid results found from Soulseek")
+        else:
+            logger.debug(f"soulseek.search() returned {len(resultlist)} raw results")
 
         # filter results
         results = [result for result in resultlist if verifyresult(result.title, cleanartist, term, losslessOnly)]
+        logger.debug(f"After verifyresult filtering: {len(results)} results")
 
         # Additional filtering for size etc
         if results and not choose_specific_download:
             results = more_filtering(results, album, albumlength, new)
+            logger.debug(f"After more_filtering: {len(results)} results")
 
+        logger.debug(f"searchSoulseek() returning {len(results) if results else 0} results")
         return results
 
     except Exception as e:
-        logger.error(f"Soulseek error, check server logs: {e}")
+        logger.error(f"Soulseek error in searchSoulseek(): {e}", exc_info=True)
         return None
 
 
