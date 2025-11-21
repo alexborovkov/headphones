@@ -375,10 +375,14 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            logger.debug(f"searchSoulseek() returned {len(soulseek_results) if soulseek_results else 0} results")
             if soulseek_results:
                 results = results + soulseek_results if results else soulseek_results
+                logger.debug(f"Combined results: {len(results)} total")
         else:
             logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
+
+        logger.debug(f"Finished all provider searches in PREFER_TORRENTS=0 mode, total results: {len(results) if results else 0}")
 
     # Torrents
     elif headphones.CONFIG.PREFER_TORRENTS == 1 and not choose_specific_download:
@@ -396,10 +400,14 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            logger.debug(f"searchSoulseek() returned {len(soulseek_results) if soulseek_results else 0} results")
             if soulseek_results:
                 results = results + soulseek_results if results else soulseek_results
+                logger.debug(f"Combined results: {len(results)} total")
         else:
             logger.debug("Skipping Soulseek search (SOULSEEK flag = 0)")
+
+        logger.debug(f"Finished all provider searches in PREFER_TORRENTS=1 mode, total results: {len(results) if results else 0}")
 
     # Soulseek
     elif headphones.CONFIG.PREFER_TORRENTS == 2 and not choose_specific_download:
@@ -444,23 +452,34 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
     if choose_specific_download:
         return results
 
+    logger.debug(f"Starting post-processing with {len(results)} total results")
+
     # Filter all results that do not comply
+    logger.debug("Filtering results by matches attribute...")
     results = [result for result in results if result.matches]
+    logger.debug(f"After filtering: {len(results)} results remain")
 
     # Sort the remaining results
+    logger.debug("Sorting results...")
     sorted_search_results = sort_search_results(results, album, new, albumlength)
+    logger.debug(f"Sorting complete: {len(sorted_search_results) if sorted_search_results else 0} results")
 
     if not sorted_search_results:
+        logger.debug("No results after sorting, returning None")
         return
 
     logger.info(
         "Making sure we can download the best result: "
         f"{sorted_search_results[0].title} from {get_provider_name(sorted_search_results[0].provider)}"
     )
+    logger.debug("Calling preprocess()...")
     (data, result) = preprocess(sorted_search_results)
+    logger.debug(f"preprocess() returned: data={'present' if data else 'None'}, result={'present' if result else 'None'}")
 
     if data and result:
+        logger.debug("Calling send_to_downloader()...")
         send_to_downloader(data, result, album)
+        logger.debug("send_to_downloader() completed")
 
 
 def more_filtering(results, album, albumlength, new):
