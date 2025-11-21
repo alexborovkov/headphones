@@ -218,8 +218,7 @@ def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_tr
                 files=album_data['files'],
                 kind='soulseek',
                 url='http://' + album_data['user'] + album_title, # URL is needed in other parts of the program.
-                #folder=os.path.basename(directory)
-                folder = album_title
+                folder=album_title
             ))
         else:
             logger.debug(f"Filtering out album with {file_count} tracks (expected {num_tracks}, ignore_track_count={ignore_track_count})")
