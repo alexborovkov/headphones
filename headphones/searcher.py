@@ -361,6 +361,8 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
 
     # NZBs
     if headphones.CONFIG.PREFER_TORRENTS == 0 and not choose_specific_download:
+        results = []
+
         if NZB_PROVIDERS and NZB_DOWNLOADERS:
             results = searchNZB(album, new, losslessOnly, albumlength)
 
@@ -380,6 +382,8 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
 
     # Torrents
     elif headphones.CONFIG.PREFER_TORRENTS == 1 and not choose_specific_download:
+        results = []
+
         if TORRENT_PROVIDERS:
             results = searchTorrent(album, new, losslessOnly, albumlength)
 
@@ -1889,8 +1893,15 @@ def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
         ':': ''
     }
 
+    logger.debug("Getting album track count...")
     num_tracks = get_album_track_count(album['AlbumID'])
+    logger.debug(f"Track count: {num_tracks}")
+
+    logger.debug("Getting year from release date...")
     year = get_year_from_release_date(album['ReleaseDate'])
+    logger.debug(f"Year: {year}")
+
+    logger.debug("Cleaning search terms...")
     cleanalbum = unidecode(replace_all(album['AlbumTitle'], replacements)).strip()
     cleanartist = unidecode(replace_all(album['ArtistName'], replacements)).strip()
 
@@ -1915,8 +1926,10 @@ def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
     logger.debug(f"Calling soulseek.search() with allow_lossless={allow_lossless}, losslessOnly={losslessOnly}, user_search_term='{term}'")
 
     try:
+        logger.debug("About to call soulseek.search()...")
         resultlist = soulseek.search(artist=cleanartist, album=cleanalbum, year=year, losslessOnly=losslessOnly,
                                   allow_lossless=allow_lossless, num_tracks=num_tracks, user_search_term=term)
+        logger.debug("soulseek.search() returned successfully")
 
         if not resultlist:
             logger.info("No valid results found from Soulseek")

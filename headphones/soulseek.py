@@ -13,8 +13,17 @@ def initialize_soulseek_client():
         host = headphones.CONFIG.SOULSEEK_API_URL
         api_key = headphones.CONFIG.SOULSEEK_API_KEY
         logger.debug(f"Initializing Soulseek client with host: {host}")
-        client = slskd_api.SlskdClient(host=host, api_key=api_key)
-        logger.debug("Soulseek client initialized successfully")
+
+        # Try to initialize with timeout support if available
+        try:
+            client = slskd_api.SlskdClient(host=host, api_key=api_key, timeout=10)
+            logger.debug("Soulseek client initialized successfully with 10s timeout")
+        except TypeError:
+            # If timeout parameter not supported, try without it
+            logger.debug("Timeout parameter not supported, initializing without timeout")
+            client = slskd_api.SlskdClient(host=host, api_key=api_key)
+            logger.debug("Soulseek client initialized successfully")
+
         return client
     except Exception as e:
         logger.error(f"Failed to initialize Soulseek client: {e}", exc_info=True)
@@ -97,15 +106,33 @@ def execute_search(client, artist, album, year, losslessOnly, allow_lossless):
 
         logger.debug(f"Executing search with text: '{search_text}'")
 
-        # Actual search
-        search_response = client.searches.search_text(searchText=search_text, filterResponses=True)
+        # Actual search with timeout handling
+        logger.debug("Calling client.searches.search_text()...")
+        try:
+            search_response = client.searches.search_text(searchText=search_text, filterResponses=True)
+            logger.debug(f"search_text() returned: {search_response}")
+        except Exception as api_error:
+            logger.error(f"API call to search_text() failed: {api_error}", exc_info=True)
+            logger.error("This usually means the slskd server is not responding or unreachable")
+            return []
+
         search_id = search_response.get('id')
         logger.debug(f"Search initiated with ID: {search_id}")
 
         # Wait for search completion with timeout (max 60 seconds)
         timeout = 60
         elapsed = 0
-        while not client.searches.state(id=search_id).get('isComplete'):
+        logger.debug("Waiting for search to complete...")
+        while True:
+            try:
+                state = client.searches.state(id=search_id)
+                is_complete = state.get('isComplete')
+                if is_complete:
+                    break
+            except Exception as state_error:
+                logger.error(f"Error checking search state: {state_error}")
+                break
+
             time.sleep(2)
             elapsed += 2
             if elapsed >= timeout:
@@ -115,13 +142,18 @@ def execute_search(client, artist, album, year, losslessOnly, allow_lossless):
                 logger.debug(f"Search {search_id} still running ({elapsed}s elapsed)...")
 
         logger.debug(f"Search {search_id} completed after {elapsed} seconds")
-        responses = client.searches.search_responses(id=search_id)
-        logger.debug(f"Retrieved {len(responses) if responses else 0} search responses")
-        return responses
+
+        try:
+            responses = client.searches.search_responses(id=search_id)
+            logger.debug(f"Retrieved {len(responses) if responses else 0} search responses")
+            return responses
+        except Exception as response_error:
+            logger.error(f"Error retrieving search responses: {response_error}")
+            return []
 
     except Exception as e:
         logger.error(f"Error in execute_search(): {e}", exc_info=True)
-        raise
+        return []
 
 # Processing the search result passed
 def process_results(results, losslessOnly, allow_lossless, num_tracks, ignore_track_count=False):
