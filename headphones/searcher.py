@@ -375,6 +375,7 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            print(f"[PRINT] Returned from searchSoulseek(), got {len(soulseek_results) if soulseek_results else 0} results", flush=True)
             logger.debug(f"searchSoulseek() returned {len(soulseek_results) if soulseek_results else 0} results")
             if soulseek_results:
                 results = results + soulseek_results if results else soulseek_results
@@ -400,6 +401,7 @@ def do_sorted_search(album, new, losslessOnly, choose_specific_download=False):
         if SOULSEEK:
             logger.info(f"Attempting Soulseek search for: {album['ArtistName']} - {album['AlbumTitle']}")
             soulseek_results = searchSoulseek(album, new, losslessOnly, albumlength)
+            print(f"[PRINT] Returned from searchSoulseek(), got {len(soulseek_results) if soulseek_results else 0} results", flush=True)
             logger.debug(f"searchSoulseek() returned {len(soulseek_results) if soulseek_results else 0} results")
             if soulseek_results:
                 results = results + soulseek_results if results else soulseek_results
@@ -1965,6 +1967,7 @@ def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
             logger.debug(f"After more_filtering: {len(results)} results")
 
         logger.debug(f"searchSoulseek() returning {len(results) if results else 0} results")
+        print(f"[PRINT] About to return from searchSoulseek() with {len(results)} results", flush=True)
         return results
 
     except Exception as e:
