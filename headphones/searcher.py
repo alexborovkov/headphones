@@ -1875,8 +1875,8 @@ def searchTorrent(album, new=False, losslessOnly=False, albumlength=None,
 def searchSoulseek(album, new=False, losslessOnly=False, albumlength=None,
                    choose_specific_download=False):
     logger.debug(f"=== searchSoulseek() called ===")
-    logger.debug(f"Album: {album.get('ArtistName')} - {album.get('AlbumTitle')}")
-    logger.debug(f"AlbumID: {album.get('AlbumID')}, losslessOnly: {losslessOnly}")
+    logger.debug(f"Album: {album['ArtistName']} - {album['AlbumTitle']}")
+    logger.debug(f"AlbumID: {album['AlbumID']}, losslessOnly: {losslessOnly}")
 
     # Not using some of the input stuff for now or ever
     replacements = {
